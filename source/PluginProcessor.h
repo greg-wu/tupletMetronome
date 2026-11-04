@@ -21,7 +21,7 @@ namespace SubMetronomeParamIDs
 
 //==============================================================================
 /**
-    SubMetronome —— 与 DAW 传输同步的任意细分节拍器。
+    tupletMetronome —— 与 DAW 传输同步的任意细分节拍器。
 
     核心设计（实现见 PluginProcessor.cpp）：
       * 插件内部不维护自由运行的相位累加器。每个 processBlock 从 AudioPlayHead
@@ -61,7 +61,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override                     { return true; }
 
-    const juce::String getName() const override         { return "SubMetronome"; }
+    const juce::String getName() const override         { return "tupletMetronome"; }
     bool acceptsMidi()  const override                  { return false; }
     bool producesMidi() const override                  { return false; }
     bool isMidiEffect() const override                  { return false; }

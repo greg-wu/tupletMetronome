@@ -83,7 +83,7 @@ void SubMetronomeAudioProcessorEditor::paint (juce::Graphics& g)
 
     g.setColour (juce::Colour (0xffe9f1f7));
     g.setFont (22.0f);
-    g.drawText ("SubMetronome", 0, 8, getWidth(), 30,
+    g.drawText ("tupletMetronome", 0, 8, getWidth(), 30,
                 juce::Justification::centred, true);
 
     g.setFont (11.0f);

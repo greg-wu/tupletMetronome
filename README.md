@@ -1,4 +1,4 @@
-# SubMetronome
+# tupletMetronome
 
 一个极简、低 CPU 占用、**与 DAW 时钟严格同步**的任意连音细分节拍器 VST3 插件，基于 JUCE 9 / C++17。
 
@@ -67,11 +67,11 @@ offset = round((k / N - p0) / q)
 JUCE 以 submodule 形式引入，**不把框架源码复制进本仓库**。
 
 ```powershell
-git clone --recurse-submodules https://github.com/greg-wu/SubMetronome.git
-cd SubMetronome
+git clone --recurse-submodules https://github.com/greg-wu/tupletMetronome.git
+cd tupletMetronome
 
 cmake -S . -B build -G "Visual Studio 18 2026" -A x64
-cmake --build build --config Release --target SubMetronome_VST3 -- /m
+cmake --build build --config Release --target tupletMetronome_VST3 -- /m
 ```
 
 若已 clone 但没带子模块：
@@ -85,20 +85,20 @@ Linux / macOS 换用对应生成器即可（例如 `cmake -S . -B build -G Ninja
 ### 产物
 
 ```
-build/SubMetronome_artefacts/Release/VST3/SubMetronome.vst3/   ← 整个文件夹是插件 bundle
+build/tupletMetronome_artefacts/Release/VST3/tupletMetronome.vst3/   ← 整个文件夹是插件 bundle
 ```
 
 把它加入 DAW 的 VST3 扫描路径，或复制到系统插件目录（Windows 需管理员权限）：
 
 ```powershell
 Copy-Item -Recurse -Force `
-  'build\SubMetronome_artefacts\Release\VST3\SubMetronome.vst3' `
+  'build\tupletMetronome_artefacts\Release\VST3\tupletMetronome.vst3' `
   'C:\Program Files\Common Files\VST3\'
 ```
 
 ## 使用
 
-1. 在 DAW 中加载 `SubMetronome`（VST3 / Tools 类别）到一个音轨。
+1. 在 DAW 中加载 `tupletMetronome`（VST3 / Tools 类别）到一个音轨。
 2. 让 DAW 处于**播放**状态；停止/暂停时插件静音，这是设计要求。
 3. 调整 `NOTES / BEAT`：`3` 为八分三连音，`5` / `7` 为五、七连音，`32` 为极限密度。
 4. 用三组音量/音高区分首拍、正拍与细分拍；所有参数都可被 DAW 自动化。
