@@ -1,0 +1,19 @@
+# 构建产物
+build/
+cmake-build-*/
+out/
+*.log
+
+# 本地 CMake 预设（可能含个人路径）
+CMakeUserPresets.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# 系统
+.DS_Store
+Thumbs.db
