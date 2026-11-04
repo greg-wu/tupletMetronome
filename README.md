@@ -1,5 +1,7 @@
 # tupletMetronome
 
+**English summary:** A minimal VST3 metronome locked to your DAW's transport. Set *Notes Per Beat* to any integer from 1 to 32 to divide each quarter note into equal clicks — 3 for triplets, 5 for quintuplets, 7 for septuplets, and so on. Accent, beat and subdivision hits each have independent volume (dB) and pitch (Hz). Built with JUCE 9 / C++17; the audio thread performs zero allocations.
+
 一个极简、低 CPU 占用、**与 DAW 时钟严格同步**的任意连音细分节拍器 VST3 插件，基于 JUCE 9 / C++17。
 
 不内置自由运行的时钟：插件每个音频块向宿主询问一次绝对 PPQ，再求「本块覆盖的 PPQ 区间」与「细分网格」的交点。因此 BPM 渐变、变速、循环、时间轴跳转、拍号变化都自动跟随宿主，无需手动对齐。
