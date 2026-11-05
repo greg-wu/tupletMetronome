@@ -232,7 +232,10 @@ void SubMetronomeAudioProcessor::renderVoices (juce::AudioBuffer<float>& buffer)
                 v.active = false;
         }
 
-        const float out = juce::jlimit (-1.0f, 1.0f, mixed);
+        // VST3 为浮点总线，允许输出短时超过 0 dBFS —— 音量上限提到 +18 dB 后，
+        // 只有放开这个上限，推高音量才不会在插件内部被削平。最终电平由宿主推子 /
+        // 总线管理。±8 仅作防数值异常的安全网，常规参数下不会触发。
+        const float out = juce::jlimit (-8.0f, 8.0f, mixed);
         left[s] += out;
         if (right != nullptr)
             right[s] += out;

@@ -43,9 +43,9 @@ offset = round((k / N - p0) / q)
 
 | 参数 | 范围 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `Accent Gain` | -60 … +6 dB | 0 dB | 小节首拍音量 |
-| `Beat Gain` | -60 … +6 dB | -6 dB | 其余正拍音量 |
-| `Sub Gain` | -60 … +6 dB | -12 dB | 细分拍音量 |
+| `Accent Gain` | -60 … +18 dB | 0 dB | 小节首拍音量 |
+| `Beat Gain` | -60 … +18 dB | -6 dB | 其余正拍音量 |
+| `Sub Gain` | -60 … +18 dB | -12 dB | 细分拍音量 |
 | `Accent Pitch` | 200 … 2400 Hz | 1200 Hz | 首拍音高 |
 | `Beat Pitch` | 200 … 2400 Hz | 800 Hz | 正拍音高 |
 | `Sub Pitch` | 200 … 2400 Hz | 600 Hz | 细分拍音高 |
@@ -53,6 +53,8 @@ offset = round((k / N - p0) / q)
 | `Waveform` | Sine / Triangle / Click | Sine | 内建波形 |
 
 `-60 dB` 视为静音，直接跳过击打。上限 `maxNotesPerBeat` 定义在 `source/PluginProcessor.h`，改一处即可整体调整（参数范围、夹紧、界面文案会同步变化）。
+
+音量上限为 `+18 dB`：VST3 使用浮点总线，插件输出允许短时超过 0 dBFS —— 否则推高音量只会在插件内部被削平，听感上没有变化。最终电平请用宿主推子 / 总线管理。插件内部仅保留 `±8` 的安全上限防止数值异常；默认 `0 / -6 / -12 dB` 的听感保持不变。
 
 ## 构建
 

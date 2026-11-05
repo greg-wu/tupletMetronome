@@ -9,7 +9,7 @@
 // 参数 ID：Editor、APVTS、自动化、预设保存全部使用同一份常量，避免字符串拼写错误。
 namespace SubMetronomeParamIDs
 {
-    inline constexpr const char* accentGain  = "accentGain";   // dB, -60 .. +6
+    inline constexpr const char* accentGain  = "accentGain";   // dB, -60 .. +18
     inline constexpr const char* beatGain    = "beatGain";     // dB
     inline constexpr const char* subGain     = "subGain";      // dB
     inline constexpr const char* accentPitch = "accentPitch";  // Hz
@@ -92,7 +92,7 @@ public:
         {
             return std::make_unique<juce::AudioParameterFloat> (
                 juce::ParameterID { id, 1 }, name,
-                juce::NormalisableRange<float> { -60.0f, 6.0f, 0.1f },
+                juce::NormalisableRange<float> { -60.0f, 18.0f, 0.1f },
                 defaultValue,
                 juce::AudioParameterFloatAttributes {}.withLabel ("dB"));
         };
