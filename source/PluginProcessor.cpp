@@ -142,10 +142,10 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
     const long long perBar = (long long) N * (long long) juce::jmax (t.numerator, 1);
 
     // 波形按「正拍 / 细分拍」分开读取：首拍 accent 属于正拍，与 beat 共用选项。
-    // 索引 0..2 = 合成波形，3 = Drum Kit（所有拍位共用同一个鼓音色）
-    const int beatWaveChoice = juce::jlimit (0, 3,
+    // 索引 0..2 = 合成波形，3 = Drum，4 = Cymbal（所有拍位共用同一个音色）
+    const int beatWaveChoice = juce::jlimit (0, 4,
         juce::roundToInt (beatWaveformParam->load (std::memory_order_relaxed)));
-    const int subWaveChoice  = juce::jlimit (0, 3,
+    const int subWaveChoice  = juce::jlimit (0, 4,
         juce::roundToInt (subWaveformParam->load (std::memory_order_relaxed)));
 
     // 高 N（例如 32 连音）+ 高 BPM 时，相邻网格间隔可能短于默认 12 ms。
@@ -156,9 +156,10 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
     const int clickSamples = juce::jlimit (1, defaultClickSamples,
         juce::roundToInt (gridIntervalSamples * 0.8));
 
-    // 鼓音固定音长，但仍按网格间隔的 95% 夹紧，避免密集细分时尾音叠成一团。
-    const int drumSamples      = juce::jmax (1, juce::roundToInt (sampleRate * (double) drumLengthMs / 1000.0));
-    const int drumLimitSamples = juce::jmax (1, juce::roundToInt (gridIntervalSamples * 0.95));
+    // 打击音固定音长（镲比鼓更长），但仍按网格间隔的 95% 夹紧，避免密集细分时尾音叠成一团。
+    const int drumSamples     = juce::jmax (1, juce::roundToInt (sampleRate * (double) drumLengthMs / 1000.0));
+    const int cymbalSamples   = juce::jmax (1, juce::roundToInt (sampleRate * (double) cymbalLengthMs / 1000.0));
+    const int hitLimitSamples = juce::jmax (1, juce::roundToInt (gridIntervalSamples * 0.95));
 
     for (auto k = kFirst; k <= kLast; ++k)
     {
@@ -193,10 +194,13 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
         // 正拍（含首拍）用 beat 选项，细分拍用 sub 选项；首拍不做特殊化
         const int wave = onQuarter ? beatWaveChoice : subWaveChoice;
 
-        // 鼓音用固定音长（再按网格间隔夹紧），合成 click 用自适应短音长
-        const int lengthSamples = wave == 3
-            ? juce::jlimit (1, drumSamples, drumLimitSamples)
-            : clickSamples;
+        // 打击音用固定音长（再按网格间隔夹紧），合成 click 用自适应短音长
+        int lengthSamples = clickSamples;
+
+        if (wave == 3)
+            lengthSamples = juce::jlimit (1, drumSamples, hitLimitSamples);
+        else if (wave == 4)
+            lengthSamples = juce::jlimit (1, cymbalSamples, hitLimitSamples);
 
         // events 天然按 offset 升序，renderVoices 顺序消费即可
         events[numEvents++] = { offset, gain, hz, wave, lengthSamples };
@@ -225,6 +229,11 @@ void SubMetronomeAudioProcessor::startVoice (const ClickEvent& e) noexcept
     {
         v.phaseInc = juce::MathConstants<double>::twoPi
                    * (double) juce::jlimit (180.0f, 400.0f, e.frequency * 0.4f) / sampleRate;
+    }
+    else if (e.waveform == 4)   // Cymbal：固定高频振铃（不超过 Nyquist），叠加高通噪声
+    {
+        const double ringHz = juce::jmin (7000.0, sampleRate * 0.35);
+        v.phaseInc = juce::MathConstants<double>::twoPi * ringHz / sampleRate;
     }
 }
 
@@ -271,11 +280,18 @@ void SubMetronomeAudioProcessor::renderVoices (juce::AudioBuffer<float>& buffer)
 
                 sample = (float) wave * env;
             }
-            else                        // Drum：低通噪声 + 短音调体，所有拍位完全一致
+            else if (v.waveform == 3)   // Drum：低通噪声 + 短音调体，所有拍位一致
             {
                 v.noiseLp += 0.40f * (nextNoise (v.rngState) - v.noiseLp);
                 const float body = (float) std::sin (v.phase);
                 sample = (0.72f * v.noiseLp + 0.28f * body) * env;
+            }
+            else                        // Cymbal：高通噪声 + 高频振铃，明亮且尾音更长
+            {
+                const float n = nextNoise (v.rngState);
+                v.noiseLp += 0.62f * (n - v.noiseLp);
+                const float ring = (float) std::sin (v.phase);
+                sample = ((n - v.noiseLp) * 1.9f + 0.22f * ring) * env;
             }
 
             mixed += sample * v.amplitude * 0.8f;   // 0.8 = 叠加 headroom

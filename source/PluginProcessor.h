@@ -131,8 +131,9 @@ public:
             "Notes Per Beat", 1, maxNotesPerBeat, 3));
 
         // 内建极简波形：正拍（首拍跟随）与细分拍可各自选择，互不影响。
-        // Drum Kit = 合成鼓音色，所有拍位共用同一个音色（首拍不做特殊化），无需采样。
-        const juce::StringArray waveformChoices { "Sine", "Triangle", "Click", "Drum Kit" };
+        // Drum / Cymbal 为两个独立合成音色（鼓：低频噪声+音调体；镲：高频噪声+金属振铃），
+        // 所有拍位共用同一个音色，首拍不做特殊化，无需采样。
+        const juce::StringArray waveformChoices { "Sine", "Triangle", "Click", "Drum", "Cymbal" };
 
         layout.add (std::make_unique<juce::AudioParameterChoice> (
             juce::ParameterID { SubMetronomeParamIDs::waveform, 1 }, "Beat Waveform",
@@ -224,7 +225,7 @@ private:
         int   sampleOffset  = 0;      // 相对本块起点的样本偏移
         float amplitude     = 0.0f;   // 线性增益（已由 dB 转换）
         float frequency     = 0.0f;
-        int   waveform      = 0;      // 0 Sine, 1 Triangle, 2 Click, 3 Drum（统一鼓音色）
+        int   waveform      = 0;      // 0 Sine, 1 Triangle, 2 Click, 3 Drum, 4 Cymbal
         int   lengthSamples = 0;      // 自适应 click 长度：高 N / 高 BPM 时自动缩短
     };
 
@@ -247,8 +248,9 @@ private:
     static constexpr int maxVoices        = 32;
     static constexpr int clickLengthMs    = 12;   // 默认包络上限，高 N 时按比例缩短
 
-    // 鼓音固定音长（ms）：统一鼓音色的衰减尾巴
+    // 打击音固定音长（ms）：鼓短促，镲需要更长的金属尾音
     static constexpr int drumLengthMs     = 90;
+    static constexpr int cymbalLengthMs   = 150;
 
     double sampleRate   = 44100.0;
     int    blockSize    = 0;

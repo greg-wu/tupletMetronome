@@ -13,7 +13,7 @@
   - `1` 四分音符 · `2` 八分音符 · `3` 八分三连音 · `4` 十六分 · `5` 五连音 · `7` 七连音 · … 任意 `N` 连音
   - 所有 `N` 共用同一套网格算法，没有针对三连音的特殊分支。
 - **三组独立控制**：首拍（小节第一拍）/ 正拍 / 细分拍各自独立音量（dB）与音高（Hz）。
-- **四种音色**：Sine、Triangle、Click（半波脉冲）、Drum Kit（合成鼓音色，所有拍位统一），全部实时合成，无采样、无外部资源。
+- **五种音色**：Sine、Triangle、Click（半波脉冲）、Drum（鼓）、Cymbal（镲），后两者为独立合成打击音，全部实时合成，无采样、无外部资源。
 - **全参数 APVTS**：DAW 自动化、工程保存、预设开箱可用。
 - **音频线程零分配、零锁**：参数用 `std::atomic<float>` 缓存，事件与发声池用固定长度 `std::array`；短促包络，CPU 占用可忽略。
 - **自适应击打长度**：高 `N` 或高 BPM 时自动缩短 click，避免相邻击打糊成一团。
@@ -50,10 +50,12 @@ offset = round((k / N - p0) / q)
 | `Beat Pitch` | 200 … 2400 Hz | 800 Hz | 正拍音高 |
 | `Sub Pitch` | 200 … 2400 Hz | 600 Hz | 细分拍音高 |
 | `Notes Per Beat` | 1 … 32（整数） | 3 | 一拍等分为几个音 |
-| `Beat Waveform` | Sine / Triangle / Click / Drum Kit | Sine | 正拍 + 首拍的音色 |
-| `Sub Waveform` | Sine / Triangle / Click / Drum Kit | Sine | 细分拍的音色，与正拍独立 |
+| `Beat Waveform` | Sine / Triangle / Click / Drum / Cymbal | Sine | 正拍 + 首拍的音色 |
+| `Sub Waveform` | Sine / Triangle / Click / Drum / Cymbal | Sine | 细分拍的音色，与正拍独立 |
 
-选择 `Drum Kit` 时所有拍位使用同一个合成鼓音色（低通噪声 + 音调体），小节首拍不做特殊化。因此 beat 与 sub 都选 Drum Kit 时整套节拍音色完全一致；若只想让正拍是鼓音、细分保持合成音，把两者设为不同选项即可。
+`Drum` 与 `Cymbal` 是两个独立的合成打击音，所有拍位共用同一个音色，小节首拍不做特殊化：
+`Drum` = 低通噪声 + 180–400 Hz 音调体（90 ms），`Cymbal` = 高通噪声 + 高频振铃（150 ms，尾音更长）。
+常见用法是正拍选 `Drum`、细分选 `Cymbal`，鼓与镲的频段差异让节拍层次更清楚。
 
 `-60 dB` 视为静音，直接跳过击打。上限 `maxNotesPerBeat` 定义在 `source/PluginProcessor.h`，改一处即可整体调整（参数范围、夹紧、界面文案会同步变化）。
 
