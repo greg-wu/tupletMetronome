@@ -7,6 +7,32 @@
 #include "PluginEditor.h"
 
 #include <algorithm>
+#include <cstdint>
+
+namespace
+{
+    // 固定种子的 xorshift32 噪声：音频线程零分配，不依赖任何随机库
+    inline float nextNoise (uint32_t& state) noexcept
+    {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return (float) (state >> 8) * (2.0f / 16777216.0f) - 1.0f;   // [-1, 1)
+    }
+
+    // 波形参数 -> 实际合成类型。
+    // "Drum Kit"（索引 3）不是单一波形：按拍位映射 kick / snare / hat，
+    // 所以即使 beat 与 sub 都选 Drum Kit，也能得到一整套鼓组而不是同一种音色。
+    inline int resolveWaveform (int paramChoice, bool isAccent, bool onQuarter) noexcept
+    {
+        if (paramChoice != 3)
+            return paramChoice;                       // Sine / Triangle / Click 原样使用
+
+        if (isAccent)
+            return 3;                                 // 小节首拍 -> Kick
+        return onQuarter ? 4 : 5;                     // 正拍 -> Snare，细分 -> Hat
+    }
+}
 
 //==============================================================================
 SubMetronomeAudioProcessor::SubMetronomeAudioProcessor()
@@ -127,10 +153,11 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
     const auto     kBar   = (long long) std::llround (t.barStartPpq * (double) N);
     const long long perBar = (long long) N * (long long) juce::jmax (t.numerator, 1);
 
-    // 波形按「正拍 / 细分拍」分开读取：首拍 accent 属于正拍，与 beat 共用波形。
-    const int beatWave = juce::jlimit (0, 2,
+    // 波形按「正拍 / 细分拍」分开读取：首拍 accent 属于正拍，与 beat 共用选项。
+    // 索引 0..2 = 合成波形，3 = Drum Kit（在事件生成时再映射到具体鼓件）
+    const int beatWaveChoice = juce::jlimit (0, 3,
         juce::roundToInt (beatWaveformParam->load (std::memory_order_relaxed)));
-    const int subWave  = juce::jlimit (0, 2,
+    const int subWaveChoice  = juce::jlimit (0, 3,
         juce::roundToInt (subWaveformParam->load (std::memory_order_relaxed)));
 
     // 高 N（例如 32 连音）+ 高 BPM 时，相邻网格间隔可能短于默认 12 ms。
@@ -140,6 +167,15 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
         juce::roundToInt (sampleRate * (double) clickLengthMs / 1000.0));
     const int clickSamples = juce::jlimit (1, defaultClickSamples,
         juce::roundToInt (gridIntervalSamples * 0.8));
+
+    // 鼓组音长：kick 需要下沉尾巴，hat 极短。仍按网格间隔的 95% 夹紧，
+    // 避免密集细分时尾音叠成一团噪声。
+    const int maxDrumSamples[3] = {
+        juce::jmax (1, juce::roundToInt (sampleRate * (double) kickLengthMs  / 1000.0)),
+        juce::jmax (1, juce::roundToInt (sampleRate * (double) snareLengthMs / 1000.0)),
+        juce::jmax (1, juce::roundToInt (sampleRate * (double) hatLengthMs   / 1000.0))
+    };
+    const int drumLimitSamples = juce::jmax (1, juce::roundToInt (gridIntervalSamples * 0.95));
 
     for (auto k = kFirst; k <= kLast; ++k)
     {
@@ -171,11 +207,17 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
         if (gain <= 0.0f)      // -60 dB 视为静音，直接跳过
             continue;
 
-        // 正拍（含首拍）用 beat 波形，细分拍用 sub 波形
-        const int wave = onQuarter ? beatWave : subWave;
+        // 正拍（含首拍）用 beat 选项，细分拍用 sub 选项；Drum Kit 再映射到 kick/snare/hat
+        const int wave = resolveWaveform (onQuarter ? beatWaveChoice : subWaveChoice,
+                                          isAccent, onQuarter);
+
+        // 鼓件用固定音长（再按网格间隔夹紧），合成 click 用自适应短音长
+        const int lengthSamples = wave >= 3
+            ? juce::jlimit (1, maxDrumSamples[wave - 3], drumLimitSamples)
+            : clickSamples;
 
         // events 天然按 offset 升序，renderVoices 顺序消费即可
-        events[numEvents++] = { offset, gain, hz, wave, clickSamples };
+        events[numEvents++] = { offset, gain, hz, wave, lengthSamples };
     }
 }
 
@@ -188,10 +230,29 @@ void SubMetronomeAudioProcessor::startVoice (const ClickEvent& e) noexcept
     v.active       = true;
     v.totalSamples = juce::jmax (1, e.lengthSamples);   // 自适应长度，随 N / BPM 变化
     v.samplesLeft  = v.totalSamples;
-    v.phase        = 0.0;                     // 三种波形在 phase=0 时输出都为 0，天然无爆音
+    v.phase        = 0.0;                     // 所有波形在 phase=0 时输出都为 0，天然无爆音
     v.phaseInc     = juce::MathConstants<double>::twoPi * (double) e.frequency / sampleRate;
     v.amplitude    = e.amplitude;
     v.waveform     = e.waveform;
+
+    // 鼓组状态必须每次重置：voice 是环形复用的
+    v.noiseLp    = 0.0f;
+    v.pitchEnv   = 0.0f;
+    v.pitchDecay = 0.0f;
+    v.startHz    = e.frequency;
+    v.rngState   = ((uint32_t) nextVoice + 1u) * 2654435761u;   // 每个 voice 不同噪声序列
+
+    if (e.waveform == 3)   // Kick：以参数音高为参考，落到 60..260 Hz 的鼓体区间
+    {
+        v.startHz    = juce::jlimit (60.0f, 260.0f, e.frequency * 0.18f);
+        v.pitchEnv   = 1.0f;
+        v.pitchDecay = 1.0f / (float) v.totalSamples;
+    }
+    else if (e.waveform == 4)   // Snare：音调体固定在 180..400 Hz，噪声层负责"沙"感
+    {
+        v.phaseInc = juce::MathConstants<double>::twoPi
+                   * (double) juce::jlimit (180.0f, 400.0f, e.frequency * 0.4f) / sampleRate;
+    }
 }
 
 void SubMetronomeAudioProcessor::renderVoices (juce::AudioBuffer<float>& buffer) noexcept
@@ -212,6 +273,7 @@ void SubMetronomeAudioProcessor::renderVoices (juce::AudioBuffer<float>& buffer)
         }
 
         float mixed = 0.0f;
+        const double twoPiOverSr = juce::MathConstants<double>::twoPi / sampleRate;
 
         for (auto& v : voices)
         {
@@ -222,17 +284,42 @@ void SubMetronomeAudioProcessor::renderVoices (juce::AudioBuffer<float>& buffer)
             const float envT = (float) v.samplesLeft / (float) v.totalSamples;
             const float env  = envT * envT;
 
-            double wave = 0.0;
-            switch (v.waveform)
+            float sample = 0.0f;
+
+            if (v.waveform <= 2)
             {
-                case 0:  wave = std::sin (v.phase);                                        break; // Sine
-                case 1:  wave = (2.0 / juce::MathConstants<double>::pi)
-                              * std::asin (std::sin (v.phase));                           break; // Triangle
-                case 2:  wave = std::max (0.0, std::sin (v.phase));                       break; // Click 半波脉冲
-                default: wave = std::sin (v.phase);                                        break;
+                double wave = 0.0;
+                switch (v.waveform)
+                {
+                    case 0:  wave = std::sin (v.phase);                                        break; // Sine
+                    case 1:  wave = (2.0 / juce::MathConstants<double>::pi)
+                                  * std::asin (std::sin (v.phase));                           break; // Triangle
+                    default: wave = std::max (0.0, std::sin (v.phase));                       break; // Click 半波脉冲
+                }
+
+                sample = (float) wave * env;
+            }
+            else if (v.waveform == 3)   // Kick：正弦 + 快速音高下扫（鼓体冲击感）
+            {
+                const float hz = 45.0f + (v.startHz - 45.0f) * v.pitchEnv * v.pitchEnv;
+                v.phaseInc = twoPiOverSr * (double) hz;
+                sample = (float) std::sin (v.phase) * env;
+                v.pitchEnv = juce::jmax (0.0f, v.pitchEnv - v.pitchDecay);
+            }
+            else if (v.waveform == 4)   // Snare：低通噪声 + 短音调体
+            {
+                v.noiseLp += 0.40f * (nextNoise (v.rngState) - v.noiseLp);
+                const float body = (float) std::sin (v.phase);
+                sample = (0.72f * v.noiseLp + 0.28f * body) * env;
+            }
+            else                        // Hat：高通噪声（噪声 - 低通残差）
+            {
+                const float n = nextNoise (v.rngState);
+                v.noiseLp += 0.55f * (n - v.noiseLp);
+                sample = (n - v.noiseLp) * 1.8f * env;
             }
 
-            mixed += (float) wave * env * v.amplitude * 0.8f;   // 0.8 = 叠加 headroom
+            mixed += sample * v.amplitude * 0.8f;   // 0.8 = 叠加 headroom
 
             v.phase += v.phaseInc;
             if (--v.samplesLeft <= 0)

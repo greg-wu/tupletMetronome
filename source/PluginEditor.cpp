@@ -47,7 +47,7 @@ SubMetronomeAudioProcessorEditor::SubMetronomeAudioProcessorEditor (SubMetronome
     addAndMakeVisible (subdivisionLabel);
 
     // ---- beat / sub 两个波形下拉框：先填条目，再创建 Attachment（见头文件注释）----
-    const juce::StringArray waveformNames { "Sine", "Triangle", "Click" };
+    const juce::StringArray waveformNames { "Sine", "Triangle", "Click", "Drum Kit" };
 
     for (auto* box : { &beatWaveBox, &subWaveBox })
     {
