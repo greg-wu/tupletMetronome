@@ -23,8 +23,9 @@ SubMetronomeAudioProcessor::SubMetronomeAudioProcessor()
     accentPitchHz    = apvts.getRawParameterValue (SubMetronomeParamIDs::accentPitch);
     beatPitchHz      = apvts.getRawParameterValue (SubMetronomeParamIDs::beatPitch);
     subPitchHz       = apvts.getRawParameterValue (SubMetronomeParamIDs::subPitch);
-    subdivisionParam = apvts.getRawParameterValue (SubMetronomeParamIDs::subdivision);
-    waveformParam    = apvts.getRawParameterValue (SubMetronomeParamIDs::waveform);
+    subdivisionParam  = apvts.getRawParameterValue (SubMetronomeParamIDs::subdivision);
+    beatWaveformParam = apvts.getRawParameterValue (SubMetronomeParamIDs::waveform);
+    subWaveformParam  = apvts.getRawParameterValue (SubMetronomeParamIDs::subWaveform);
 }
 
 //==============================================================================
@@ -126,8 +127,11 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
     const auto     kBar   = (long long) std::llround (t.barStartPpq * (double) N);
     const long long perBar = (long long) N * (long long) juce::jmax (t.numerator, 1);
 
-    const int wave = juce::jlimit (0, 2,
-        juce::roundToInt (waveformParam->load (std::memory_order_relaxed)));
+    // 波形按「正拍 / 细分拍」分开读取：首拍 accent 属于正拍，与 beat 共用波形。
+    const int beatWave = juce::jlimit (0, 2,
+        juce::roundToInt (beatWaveformParam->load (std::memory_order_relaxed)));
+    const int subWave  = juce::jlimit (0, 2,
+        juce::roundToInt (subWaveformParam->load (std::memory_order_relaxed)));
 
     // 高 N（例如 32 连音）+ 高 BPM 时，相邻网格间隔可能短于默认 12 ms。
     // 按间隔的 80% 自适应缩短 click，避免相邻击打糊成一团。
@@ -166,6 +170,9 @@ void SubMetronomeAudioProcessor::collectGridEvents (const TransportSnapshot& t,
         const float gain = juce::Decibels::decibelsToGain (db, -60.0f);
         if (gain <= 0.0f)      // -60 dB 视为静音，直接跳过
             continue;
+
+        // 正拍（含首拍）用 beat 波形，细分拍用 sub 波形
+        const int wave = onQuarter ? beatWave : subWave;
 
         // events 天然按 offset 升序，renderVoices 顺序消费即可
         events[numEvents++] = { offset, gain, hz, wave, clickSamples };

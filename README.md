@@ -50,7 +50,8 @@ offset = round((k / N - p0) / q)
 | `Beat Pitch` | 200 … 2400 Hz | 800 Hz | 正拍音高 |
 | `Sub Pitch` | 200 … 2400 Hz | 600 Hz | 细分拍音高 |
 | `Notes Per Beat` | 1 … 32（整数） | 3 | 一拍等分为几个音 |
-| `Waveform` | Sine / Triangle / Click | Sine | 内建波形 |
+| `Beat Waveform` | Sine / Triangle / Click | Sine | 正拍 + 首拍的波形 |
+| `Sub Waveform` | Sine / Triangle / Click | Sine | 细分拍的波形，与正拍独立 |
 
 `-60 dB` 视为静音，直接跳过击打。上限 `maxNotesPerBeat` 定义在 `source/PluginProcessor.h`，改一处即可整体调整（参数范围、夹紧、界面文案会同步变化）。
 

@@ -16,7 +16,12 @@ namespace SubMetronomeParamIDs
     inline constexpr const char* beatPitch   = "beatPitch";    // Hz
     inline constexpr const char* subPitch    = "subPitch";     // Hz
     inline constexpr const char* subdivision = "subdivision";  // 每拍细分数 N（整数 1..maxNotesPerBeat）
-    inline constexpr const char* waveform    = "waveform";     // 0=Sine, 1=Triangle, 2=Click
+
+    // 波形（0=Sine, 1=Triangle, 2=Click）：正拍与细分拍各自独立。
+    // "waveform" 沿用旧 ID，语义收敛为「正拍 + 首拍」的波形，
+    // 这样旧工程 / 预设里保存的波形值继续作用于正拍，不会失效。
+    inline constexpr const char* waveform    = "waveform";     // beat (+ accent) 波形
+    inline constexpr const char* subWaveform = "subWaveform";  // 细分拍波形
 }
 
 //==============================================================================
@@ -124,10 +129,16 @@ public:
             juce::ParameterID { SubMetronomeParamIDs::subdivision, 1 },
             "Notes Per Beat", 1, maxNotesPerBeat, 3));
 
-        // 内建极简波形（UI 可省略此控件，由代码或自动化控制）
+        // 内建极简波形：正拍（首拍跟随）与细分拍可各自选择，互不影响。
+        const juce::StringArray waveformChoices { "Sine", "Triangle", "Click" };
+
         layout.add (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID { SubMetronomeParamIDs::waveform, 1 }, "Waveform",
-            juce::StringArray { "Sine", "Triangle", "Click" }, 0));
+            juce::ParameterID { SubMetronomeParamIDs::waveform, 1 }, "Beat Waveform",
+            waveformChoices, 0));
+
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { SubMetronomeParamIDs::subWaveform, 1 }, "Sub Waveform",
+            waveformChoices, 0));
 
         return layout;
     }
@@ -201,8 +212,9 @@ private:
     std::atomic<float>* accentPitchHz    = nullptr;
     std::atomic<float>* beatPitchHz      = nullptr;
     std::atomic<float>* subPitchHz       = nullptr;
-    std::atomic<float>* subdivisionParam = nullptr;
-    std::atomic<float>* waveformParam    = nullptr;
+    std::atomic<float>* subdivisionParam  = nullptr;
+    std::atomic<float>* beatWaveformParam = nullptr;   // 正拍 + 首拍
+    std::atomic<float>* subWaveformParam  = nullptr;   // 细分拍
 
     //---- 固定长度的音频线程数据结构：绝不 new / 绝不加锁 ------------------------
     struct ClickEvent

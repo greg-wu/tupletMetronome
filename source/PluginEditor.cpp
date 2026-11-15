@@ -3,7 +3,7 @@
 namespace
 {
     constexpr int editorWidth   = 620;
-    constexpr int editorHeight  = 410;
+    constexpr int editorHeight  = 452;   // 比旧版多一行波形选择
     constexpr int margin        = 22;
     constexpr int titleHeight   = 48;
     constexpr int controlHeight = 30;
@@ -46,9 +46,25 @@ SubMetronomeAudioProcessorEditor::SubMetronomeAudioProcessorEditor (SubMetronome
     subdivisionLabel.setColour (juce::Label::textColourId, juce::Colour (0xff9fb0c0));
     addAndMakeVisible (subdivisionLabel);
 
-    // ---- waveform ComboBox 必须先填条目，再创建 Attachment（见头文件注释）----
-    waveformBox.addItemList (juce::StringArray { "Sine", "Triangle", "Click" }, 1);
-    addAndMakeVisible (waveformBox);
+    // ---- beat / sub 两个波形下拉框：先填条目，再创建 Attachment（见头文件注释）----
+    const juce::StringArray waveformNames { "Sine", "Triangle", "Click" };
+
+    for (auto* box : { &beatWaveBox, &subWaveBox })
+    {
+        box->addItemList (waveformNames, 1);
+        box->setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff232a33));
+        box->setColour (juce::ComboBox::textColourId,       juce::Colour (0xffe9f1f7));
+        box->setColour (juce::ComboBox::outlineColourId,    juce::Colour (0xff3a4553));
+        box->setColour (juce::ComboBox::arrowColourId,      juce::Colour (0xff9fb0c0));
+        addAndMakeVisible (*box);
+    }
+
+    for (auto* l : { &beatWaveLabel, &subWaveLabel })
+    {
+        l->setJustificationType (juce::Justification::centredLeft);
+        l->setColour (juce::Label::textColourId, juce::Colour (0xff9fb0c0));
+        addAndMakeVisible (*l);
+    }
 
     // ---- 与 APVTS 绑定：自动化 / 预设 / 参数改变全部双向同步 ----
     auto& state = processor.apvts;
@@ -70,8 +86,11 @@ SubMetronomeAudioProcessorEditor::SubMetronomeAudioProcessorEditor (SubMetronome
     subPitchAttachment = std::make_unique<SliderAttachment> (
         state, SubMetronomeParamIDs::subPitch, subPitchSlider);
 
-    waveformAttachment = std::make_unique<ComboBoxAttachment> (
-        state, SubMetronomeParamIDs::waveform, waveformBox);
+    beatWaveAttachment = std::make_unique<ComboBoxAttachment> (
+        state, SubMetronomeParamIDs::waveform, beatWaveBox);
+
+    subWaveAttachment = std::make_unique<ComboBoxAttachment> (
+        state, SubMetronomeParamIDs::subWaveform, subWaveBox);
 
     setSize (editorWidth, editorHeight);
 }
@@ -90,7 +109,7 @@ void SubMetronomeAudioProcessorEditor::paint (juce::Graphics& g)
     g.setColour (juce::Colour (0xff728294));
     const auto info = juce::String ("DAW synced  -  1..")
                     + juce::String (SubMetronomeAudioProcessor::maxNotesPerBeat)
-                    + " notes per beat  -  any tuplet";
+                    + " notes per beat  -  independent beat / sub waveforms";
     g.drawText (info, 0, 34, getWidth(), 16, juce::Justification::centred, true);
 }
 
@@ -99,14 +118,23 @@ void SubMetronomeAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced (margin);
     area.removeFromTop (titleHeight);
 
-    // 顶部一行：左半 = 标签 + 每拍细分数滑块，右半 = 波形下拉框
-    auto controlRow = area.removeFromTop (controlHeight);
-    auto leftHalf = controlRow.removeFromLeft ((controlRow.getWidth() - 12) / 2);
-    controlRow.removeFromLeft (12);
-    waveformBox.setBounds (controlRow);
+    // 行 1：标签 + 每拍细分数滑块
+    auto notesRow = area.removeFromTop (controlHeight);
+    subdivisionLabel.setBounds (notesRow.removeFromLeft (108));
+    subdivisionSlider.setBounds (notesRow);
 
-    subdivisionLabel.setBounds (leftHalf.removeFromLeft (108));
-    subdivisionSlider.setBounds (leftHalf);
+    area.removeFromTop (12);
+
+    // 行 2：正拍波形 / 细分拍波形，左右各半
+    auto waveRow = area.removeFromTop (controlHeight);
+    auto leftHalf = waveRow.removeFromLeft ((waveRow.getWidth() - 12) / 2);
+    waveRow.removeFromLeft (12);
+
+    beatWaveLabel.setBounds (leftHalf.removeFromLeft (92));
+    beatWaveBox.setBounds (leftHalf);
+
+    subWaveLabel.setBounds (waveRow.removeFromLeft (92));
+    subWaveBox.setBounds (waveRow);
 
     area.removeFromTop (16);
 

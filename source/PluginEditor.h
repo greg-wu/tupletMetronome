@@ -33,9 +33,11 @@ private:
     juce::Slider accentGainSlider,  beatGainSlider,  subGainSlider;
     juce::Slider accentPitchSlider, beatPitchSlider, subPitchSlider;
     juce::Slider subdivisionSlider;   // 每拍细分数 N（整数 1..maxNotesPerBeat）
-    juce::ComboBox waveformBox;
+    juce::ComboBox beatWaveBox, subWaveBox;   // 正拍 / 细分拍波形，各自独立
 
     juce::Label subdivisionLabel { {}, "NOTES / BEAT" };
+    juce::Label beatWaveLabel    { {}, "BEAT WAVE" };
+    juce::Label subWaveLabel     { {}, "SUB WAVE" };
     juce::Label accentGainLabel  { {}, "ACCENT VOL" };
     juce::Label beatGainLabel    { {}, "BEAT VOL" };
     juce::Label subGainLabel     { {}, "SUB VOL" };
@@ -45,6 +47,7 @@ private:
 
     // 用 unique_ptr 延迟创建：waveform ComboBox 必须先 addItemList 再绑定，
     // 否则 ComboBoxParameterAttachment 用 getNumItems()-1 做映射会得到 -1。
+    // （beat / sub 两个下拉框各自绑定一个 Choice 参数）
     std::unique_ptr<SliderAttachment> subdivisionAttachment;
     std::unique_ptr<SliderAttachment> accentGainAttachment;
     std::unique_ptr<SliderAttachment> beatGainAttachment;
@@ -53,7 +56,8 @@ private:
     std::unique_ptr<SliderAttachment> beatPitchAttachment;
     std::unique_ptr<SliderAttachment> subPitchAttachment;
 
-    std::unique_ptr<ComboBoxAttachment> waveformAttachment;
+    std::unique_ptr<ComboBoxAttachment> beatWaveAttachment;
+    std::unique_ptr<ComboBoxAttachment> subWaveAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SubMetronomeAudioProcessorEditor)
 };
