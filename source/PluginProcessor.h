@@ -131,7 +131,7 @@ public:
             "Notes Per Beat", 1, maxNotesPerBeat, 3));
 
         // 内建极简波形：正拍（首拍跟随）与细分拍可各自选择，互不影响。
-        // Drum Kit = 合成鼓组，按拍位映射 kick（首拍）/ snare（正拍）/ hat（细分），无需采样。
+        // Drum Kit = 合成鼓音色，所有拍位共用同一个音色（首拍不做特殊化），无需采样。
         const juce::StringArray waveformChoices { "Sine", "Triangle", "Click", "Drum Kit" };
 
         layout.add (std::make_unique<juce::AudioParameterChoice> (
@@ -224,7 +224,7 @@ private:
         int   sampleOffset  = 0;      // 相对本块起点的样本偏移
         float amplitude     = 0.0f;   // 线性增益（已由 dB 转换）
         float frequency     = 0.0f;
-        int   waveform      = 0;      // 0 Sine, 1 Triangle, 2 Click, 3 Kick, 4 Snare, 5 Hat
+        int   waveform      = 0;      // 0 Sine, 1 Triangle, 2 Click, 3 Drum（统一鼓音色）
         int   lengthSamples = 0;      // 自适应 click 长度：高 N / 高 BPM 时自动缩短
     };
 
@@ -238,22 +238,17 @@ private:
         float  amplitude    = 0.0f;
         int    waveform     = 0;
 
-        // ---- 鼓组合成状态（waveform >= 3 时使用，全部为定长 POD，无分配） ----
-        float    noiseLp    = 0.0f;   // 一阶低通状态：snare 保留中频、hat 做高通残差
-        float    startHz    = 120.0f; // kick 音高下扫起点
-        float    pitchEnv   = 0.0f;   // 1 -> 0 的下扫进度（仅 kick）
-        float    pitchDecay = 0.0f;   // 每样本递减量
-        uint32_t rngState   = 0x9e3779b9u;   // xorshift32：噪声源
+        // ---- 鼓合成状态（waveform == 3 时使用，定长 POD，无分配） ----
+        float    noiseLp  = 0.0f;   // 一阶低通状态
+        uint32_t rngState = 0x9e3779b9u;   // xorshift32：噪声源
     };
 
     static constexpr int maxEventsPerBlock = 128;  // N=32 时单块事件数仍远小于此
     static constexpr int maxVoices        = 32;
     static constexpr int clickLengthMs    = 12;   // 默认包络上限，高 N 时按比例缩短
 
-    // 鼓组固定音长（ms）：kick 需要下沉尾巴，hat 必须短促
-    static constexpr int kickLengthMs     = 110;
-    static constexpr int snareLengthMs    = 90;
-    static constexpr int hatLengthMs      = 45;
+    // 鼓音固定音长（ms）：统一鼓音色的衰减尾巴
+    static constexpr int drumLengthMs     = 90;
 
     double sampleRate   = 44100.0;
     int    blockSize    = 0;
